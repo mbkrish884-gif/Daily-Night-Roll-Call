@@ -1,42 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
-import { todayKey } from "@/lib/date";
-import { pcNumberSchema } from "@/lib/validation";
+import { loginSchema } from "@/lib/validation";
+import { verifyPassword } from "@/lib/password";
+import { signSession, SESSION_COOKIE, sessionCookieOptions } from "@/lib/auth";
+import { writeAudit } from "@/lib/audit";
+import type { Role } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: NextRequest) {
-  const raw = req.nextUrl.searchParams.get("pc") ?? "";
-  const parsed = pcNumberSchema.safeParse(raw);
+export async function POST(req: NextRequest) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: false, error: "Invalid request." }, { status: 400 });
+  }
+  const parsed = loginSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ ok: false, error: "Enter a valid PC number." }, { status: 400 });
-  }
-  const date = todayKey();
-  const entry = await prisma.dailyRosterEntry.findFirst({
-    where: { roster: { date }, pc: { pcNumber: parsed.data } },
-    include: { pc: true, attendance: true, roster: true },
-  });
-
-  if (!entry) {
-    return NextResponse.json(
-      { ok: false, error: "This PC number is not on tonight's roster." },
-      { status: 404 }
-    );
+    return NextResponse.json({ ok: false, error: "Enter username and password." }, { status: 400 });
   }
 
-  return NextResponse.json({
-    ok: true,
-    date,
-    rollCallTime: entry.roster.rollCallTime,
-    platoon: entry.roster.platoon,
-    pc: {
-      pcNumber: entry.pc.pcNumber,
-      rank: entry.pc.rank,
-      name: entry.pc.name,
-      unit: entry.pc.unit,
-    },
-    status: entry.attendance?.status ?? "PENDING",
-    presentAt: entry.attendance?.presentAt ?? null,
-    dutyRemarks: entry.attendance?.dutyRemarks ?? entry.dutyRemarks ?? null,
+  const user = await prisma.user.findUnique({ where: { username: parsed.data.username } });
+  const valid = user && user.active && (await verifyPassword(parsed.data.password, user.passwordHash));
+  if (!user || !valid) {
+    return NextResponse.json({ ok: false, error: "Invalid username or password." }, { status: 401 });
+  }
+
+  const token = await signSession({
+    sub: user.id,
+    username: user.username,
+    name: user.name,
+    role: user.role as Role,
   });
+  cookies().set(SESSION_COOKIE, token, sessionCookieOptions());
+
+  await writeAudit({
+    actorId: user.id,
+    actorLabel: `admin:${user.username}`,
+    action: "LOGIN",
+    entity: "user",
+    entityId: user.id,
+  });
+
+  return NextResponse.json({ ok: true });
 }
