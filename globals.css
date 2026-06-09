@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #f1f3ee;
+  color: #0f172a;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Status pill base */
+.pill {
+  @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold;
+}
+
+/* Large touch-friendly inputs for the mobile form */
+.field {
+  @apply w-full rounded-lg border border-slate-300 bg-white px-4 py-3 text-base outline-none focus:border-khaki focus:ring-2 focus:ring-khaki/30;
+}
+
+.btn {
+  @apply inline-flex items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed;
+}
+.btn-primary {
+  @apply btn bg-khaki text-white hover:bg-khaki-dark;
+}
+.btn-ghost {
+  @apply btn border border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
+}
+
+/* Print: hide chrome, show only the report */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+  }
+}
